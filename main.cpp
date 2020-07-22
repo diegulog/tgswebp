@@ -115,7 +115,6 @@ int main(int argc, char* argv[]) {
         ++pic_num;
     }
 
-// add a last fake frame to signal the last duration
     ok = ok && WebPAnimEncoderAdd(enc, nullptr, timestamp_ms, nullptr);
     ok = ok && WebPAnimEncoderAssemble(enc, &webp_data);
     if (!ok) {
@@ -134,38 +133,6 @@ int main(int argc, char* argv[]) {
 
 
     return 0;
-}
-
-static size_t Encode(const uint8_t *rgba, int width, int height, int stride, float quality_factor,
-                     uint8_t **output) {
-    WebPPicture pic;
-    WebPConfig config;
-    WebPMemoryWriter wrt;
-    int ok;
-
-    if (output == nullptr) return 0;
-    if (!WebPConfigPreset(&config, WEBP_PRESET_DEFAULT, quality_factor) ||
-        !WebPPictureInit(&pic)) {
-        return 0;  // shouldn't happen, except if system installation is broken
-    }
-
-    pic.use_argb = 1;
-    pic.width = width;
-    pic.height = height;
-    pic.writer = WebPMemoryWrite;
-    pic.custom_ptr = &wrt;
-    WebPMemoryWriterInit(&wrt);
-
-    ok = WebPPictureImportRGBA(&pic, rgba, stride) && WebPEncode(&config, &pic);
-    WebPPictureFree(&pic);
-    if (!ok) {
-        printf("FAIL WebPPictureImportRGBA");
-        WebPMemoryWriterClear(&wrt);
-        *output = nullptr;
-        return 0;
-    }
-    *output = wrt.mem;
-    return wrt.size;
 }
 
 
