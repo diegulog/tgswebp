@@ -42,10 +42,6 @@ static void Help(void) {
   printf("File-level options (only used at the start of compression):\n");
   printf(" -min_size ............ minimize size\n");
   printf(" -loop <int> .......... loop count (default: 0, = infinite loop)\n");
-  printf(" -kmax <int> .......... maximum number of frame between key-frames\n"
-         "                        (0=only keyframes)\n");
-  printf(" -kmin <int> .......... minimum number of frame between key-frames\n"
-         "                        (0=disable key-frames altogether)\n");
   printf(" -mixed ............... use mixed lossy/lossless automatic mode\n");
   printf(" -v ................... verbose mode\n");
   printf(" -h ................... this help\n");
