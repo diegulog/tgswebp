@@ -11,7 +11,6 @@
 // Authors: Diego Gl (diegulog@gmail.com)
 
 #include <iostream>
-
 #ifdef HAVE_CONFIG_H
 #include "webp/config.h"
 #endif
@@ -27,23 +26,11 @@
 #include "../examples/unicode.h"
 #include "../examples/example_util.h"
 
-#define CHUNK 16384
-
 #if !defined(STDIN_FILENO)
 #define STDIN_FILENO 0
 #endif
 
 //------------------------------------------------------------------------------
-
-static const char *const kErrorMessages[-WEBP_MUX_NOT_ENOUGH_DATA + 1] = {
-        "WEBP_MUX_NOT_FOUND", "WEBP_MUX_INVALID_ARGUMENT", "WEBP_MUX_BAD_DATA",
-        "WEBP_MUX_MEMORY_ERROR", "WEBP_MUX_NOT_ENOUGH_DATA"
-};
-
-static const char *ErrorString(WebPMuxError err) {
-    assert(err <= WEBP_MUX_NOT_FOUND && err >= WEBP_MUX_NOT_ENOUGH_DATA);
-    return kErrorMessages[-err];
-}
 
 std::string basename(const std::string &str) {
     return str.substr(str.find_last_of("/\\") + 1);
@@ -60,15 +47,6 @@ bool tgsFile(std::string fileName) {
     return !(fileName.size() <= extn.size() ||
              fileName.substr(fileName.size() - extn.size()) != extn);
 }
-
-/* Decompress from file source to file dest until stream ends or EOF.
-   inf() returns Z_OK on success, Z_MEM_ERROR if memory could not be
-   allocated for processing, Z_DATA_ERROR if the deflate data is
-   invalid or incomplete, Z_VERSION_ERROR if the version of zlib.h and
-   the version of the library linked do not match, or Z_ERRNO if there
-   is an error reading or writing the files. */
-
-//------------------------------------------------------------------------------
 
 static void Help(void) {
     printf("Usage:\n");
