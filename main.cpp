@@ -277,7 +277,7 @@ int main(int argc, const char *argv[]) {
     if (!enc_options.allow_mixed) config.lossless = 1;
     config.sns_strength = 100;
     config.filter_sharpness = 6;
-    config.alpha_quality = 10;
+    config.alpha_quality = 5;
 
     if (!WebPValidateConfig(&config)) {
         fprintf(stderr, "Error! Invalid configuration.\n");
@@ -317,10 +317,10 @@ int main(int argc, const char *argv[]) {
 
     //  if( total_frame_lottie > 25 ) skip = total_frame_lottie/25;
     frame_duration = (duration_lottie / (total_frame_lottie / skip)) * 1000;
-    fprintf(stderr,"total frames lottie: %d\n", total_frame_lottie);
-    fprintf(stderr,"total duration: %d  ms\n", int(duration_lottie*1000));
-    fprintf(stderr,"frame duration: %d  ms\n", frame_duration);
-    fprintf(stderr,"total frames webp out: %d\n", (total_frame_lottie/skip)+1);
+    fprintf(stderr,"Frames lottie:      %d\n", total_frame_lottie);
+    fprintf(stderr,"Total duration:     %d ms\n", int(duration_lottie*1000));
+    fprintf(stderr,"Frame duration:     %d ms\n", frame_duration);
+    fprintf(stderr,"Frames webp out:    %d\n", (total_frame_lottie/skip)+1);
 
 
     //  player->size(reinterpret_cast<size_t &>(width), reinterpret_cast<size_t &>(height));
@@ -330,7 +330,7 @@ int main(int argc, const char *argv[]) {
     if (player == NULL) goto End;
 
     for (int i = 0; i < total_frame_lottie; i += skip) {
-        fprintf(stderr, "INFO: Added frame: %d/%d \r", i, total_frame_lottie);
+        fprintf(stderr, "INFO: Added frame:  %d/%d \r", i, total_frame_lottie);
         rlottie::Surface surface(buffer.get(), width, height, width * 4);
         player->renderSync(i, surface);
         if (!WebPPictureAlloc(&frame)) {
