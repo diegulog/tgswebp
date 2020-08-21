@@ -11,6 +11,7 @@
 // Authors: Diego Gl (diegulog@gmail.com)
 
 #include <iostream>
+
 #ifdef HAVE_CONFIG_H
 #include "webp/config.h"
 #endif
@@ -25,16 +26,23 @@
 #include "lib/rlottie/inc/rlottie.h"
 #include "../examples/unicode.h"
 #include "../examples/example_util.h"
+#include "zlib.h"
 
+#define BUFLEN      16384
+#ifdef MAXSEG_64K
+#  define local static
+/* Needed for systems with limitation on stack size. */
+#else
+#  define local
+#endif
 #if !defined(STDIN_FILENO)
 #define STDIN_FILENO 0
 #endif
 
 //------------------------------------------------------------------------------
 
-std::string basename(const std::string &str) {
-    return str.substr(str.find_last_of("/\\") + 1);
-}
+static char *prog;
+
 
 bool jsonFile(std::string fileName) {
     std::string extn = ".json";
@@ -46,6 +54,29 @@ bool tgsFile(std::string fileName) {
     std::string extn = ".tgs";
     return !(fileName.size() <= extn.size() ||
              fileName.substr(fileName.size() - extn.size()) != extn);
+}
+
+void error(const char *msg) {
+    fprintf(stderr, "%s: %s\n", prog, msg);
+    exit(1);
+}
+
+std::string gz_uncompress(gzFile in) {
+    local char buf[BUFLEN];
+    std::string json;
+    int len;
+    int err;
+    for (;;) {
+        len = gzread(in, buf, sizeof(buf));
+        if (len < 0) error(gzerror(in, &err));
+        if (len == 0) break;
+        std::string s(buf,len);
+        json += s;
+    }
+    if (gzclose(in) != Z_OK ){
+        error("failed close");
+    }
+    return json;
 }
 
 static void Help(void) {
@@ -67,7 +98,7 @@ static void Help(void) {
     printf("  -mt .................... use multi-threading if available\n");
     printf("\n");
     printf("  -version ............... print version number and exit\n");
-    printf("  -v ..................... verbose\n");
+    printf("  -v ..................... verbose webp\n");
     printf("  -quiet ................. don't print anything\n");
     printf("\n");
 }
@@ -76,7 +107,6 @@ static void Help(void) {
 
 int main(int argc, const char *argv[]) {
     int verbose = 0;
-    WebPMuxError err = WEBP_MUX_OK;
     int ok = 0;
     const W_CHAR *in_file = NULL, *out_file = NULL;
     int frame_timestamp = 0;
@@ -84,7 +114,7 @@ int main(int argc, const char *argv[]) {
     int width = 512, height = 512;
     int skip = 1;
     int total_frame_lottie = 1;
-    double duration_lottie = 0;
+    int duration_lottie = 0;
     std::unique_ptr<rlottie::Animation> player;
     std::unique_ptr<uint32_t[]> buffer;
     WebPPicture frame;                // Frame rectangle only (not disposed).
@@ -181,16 +211,12 @@ int main(int argc, const char *argv[]) {
 
 
     if (tgsFile(in_file)) {
-   /*     ok = decompress();
-        if (ok != Z_OK) {
-            zerr(ok);
-            Help();
-            goto End;
-        } else {
-            player = rlottie::Animation::loadFromData(in_file, in_file);
-        }*/
+        gzFile file = gzopen(in_file, "rb");
+        if (file == NULL) error("can't open tgs file");
+        std::string json = gz_uncompress(file);
+       if (!json.empty()) player = rlottie::Animation::loadFromData(json, in_file);
     } else if (jsonFile(in_file)) {
-        player = rlottie::Animation::loadFromFile(in_file);
+        player = rlottie::Animation::loadFromFile(in_file, true);
     } else {
         fprintf(stderr, "Invalid input file format, only supports json or tgs\n");
         Help();
@@ -201,15 +227,15 @@ int main(int argc, const char *argv[]) {
     player = rlottie::Animation::loadFromFile(in_file);
     buffer = std::unique_ptr<uint32_t[]>(new uint32_t[width * height]);
     total_frame_lottie = player->totalFrame();
-    duration_lottie = player->duration();
-
-
+    duration_lottie = int(player->duration() * 1000);
     //  if( total_frame_lottie > 25 ) skip = total_frame_lottie/25;
-    frame_duration = (duration_lottie / (total_frame_lottie / skip)) * 1000;
-    fprintf(stderr,"Frames lottie:      %d\n", total_frame_lottie);
-    fprintf(stderr,"Total duration:     %d ms\n", int(duration_lottie*1000));
-    fprintf(stderr,"Frame duration:     %d ms\n", frame_duration);
-    fprintf(stderr,"Frames webp out:    %d\n", (total_frame_lottie/skip)+1);
+    frame_duration = duration_lottie/ (total_frame_lottie / skip) ;
+    fprintf(stderr, "Frames lottie:      %d\n", total_frame_lottie);
+    fprintf(stderr, "Total duration:     %d ms\n", duration_lottie);
+    fprintf(stderr, "Frame duration:     %d ms\n", frame_duration);
+    fprintf(stderr, "Frames webp out:    %d\n", (total_frame_lottie / skip) + 1);
+
+
 
 
     //  player->size(reinterpret_cast<size_t &>(width), reinterpret_cast<size_t &>(height));
@@ -233,22 +259,21 @@ int main(int argc, const char *argv[]) {
             enc = WebPAnimEncoderNew(width, height, &enc_options);
             ok = (enc != nullptr);
             if (!ok) {
-                printf("Could not create WebPAnimEncoder object.");
+                fprintf(stderr, "Could not create WebPAnimEncoder object.");
             }
         }
 
         if (ok) {
             ok = (width == frame.width && height == frame.height);
             if (!ok) {
-                printf("Framedimension mismatched! ");
-
+                fprintf(stderr, "Framedimension mismatched! ");
             }
         }
 
         if (ok) {
             ok = WebPAnimEncoderAdd(enc, &frame, frame_timestamp, &config);
             if (!ok) {
-                printf("Error while adding frame");
+                fprintf(stderr, "Error while adding frame");
             }
         }
         WebPPictureFree(&frame);
