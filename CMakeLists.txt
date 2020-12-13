@@ -10,3 +10,4 @@ add_executable(tgswebp main.cpp)
 
 target_link_libraries (tgswebp rlottie webpdecoder exampleutil libwebpmux zlibstatic)
 
+install(TARGETS tgswebp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

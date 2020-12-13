@@ -20,9 +20,9 @@
 #include <unistd.h>
 #endif
 
-#include <src/webp/encode.h>
-#include <src/webp/mux.h>
-#include <imageio/imageio_util.h>
+#include <webp/mux.h>
+#include <../imageio/imageio_util.h>
+#include <webp/encode.h>
 #include "lib/rlottie/inc/rlottie.h"
 #include "../examples/unicode.h"
 #include "../examples/example_util.h"
@@ -70,10 +70,10 @@ std::string gz_uncompress(gzFile in) {
         len = gzread(in, buf, sizeof(buf));
         if (len < 0) error(gzerror(in, &err));
         if (len == 0) break;
-        std::string s(buf,len);
+        std::string s(buf, len);
         json += s;
     }
-    if (gzclose(in) != Z_OK ){
+    if (gzclose(in) != Z_OK) {
         error("failed close");
     }
     return json;
@@ -98,8 +98,8 @@ static void Help(void) {
     printf("  -mt .................... use multi-threading if available\n");
     printf("\n");
     printf("  -version ............... print version number and exit\n");
-    printf("  -v ..................... verbose webp\n");
-    printf("  -quiet ................. don't print anything\n");
+    printf("  -frames  ............... print only original frames, test only method\n");
+    printf("  -v ..................... verbose\n");
     printf("\n");
 }
 
@@ -107,10 +107,12 @@ static void Help(void) {
 
 int main(int argc, const char *argv[]) {
     int verbose = 0;
-    int ok = 0;
-    const W_CHAR *in_file = NULL, *out_file = NULL;
+    int ok = 1;
+    const W_CHAR *in_file = nullptr, *out_file = nullptr;
     int frame_timestamp = 0;
     int frame_duration = 0;
+    int pic_num = 0;
+    int test_frames_info = 0;
     int width = 512, height = 512;
     int skip = 1;
     int total_frame_lottie = 1;
@@ -118,31 +120,31 @@ int main(int argc, const char *argv[]) {
     std::unique_ptr<rlottie::Animation> player;
     std::unique_ptr<uint32_t[]> buffer;
     WebPPicture frame;                // Frame rectangle only (not disposed).
-    WebPAnimEncoder *enc = NULL;
+    WebPAnimEncoder *enc = nullptr;
     WebPAnimEncoderOptions enc_options;
     WebPConfig config;
-    int c;
-    int quiet = 0;
-    WebPData webp_data;
-    WebPMux *mux = NULL;
 
-    if (!WebPConfigInit(&config) || !WebPAnimEncoderOptionsInit(&enc_options) ||
-        !WebPPictureInit(&frame)) {
-        fprintf(stderr, "Error! Version mismatch!\n");
-        FREE_WARGV_AND_RETURN(-1);
-    }
-    WebPDataInit(&webp_data);
+    int c;
+    WebPData webp_data;
+    WebPMux *mux = nullptr;
 
     if (argc == 1) {
         Help();
-        FREE_WARGV_AND_RETURN(0);
+        FREE_WARGV_AND_RETURN(1);
     }
+    if (!WebPConfigInit(&config) || !WebPAnimEncoderOptionsInit(&enc_options) ||
+        !WebPPictureInit(&frame)) {
+        fprintf(stderr, "Error! Version mismatch!\n");
+        ok = 0;
+        goto End;
+    }
+    WebPDataInit(&webp_data);
 
-    for (c = 1; c < argc; ++c) {
+    for (c = 1; ok && c < argc; ++c) {
         int parse_error = 0;
         if (!strcmp(argv[c], "-h") || !strcmp(argv[c], "-help")) {
             Help();
-            FREE_WARGV_AND_RETURN(0);
+            goto End;
         } else if (!strcmp(argv[c], "-o") && c < argc - 1) {
             out_file = GET_WARGV(argv, ++c);
         } else if (!strcmp(argv[c], "-lossy")) {
@@ -169,41 +171,38 @@ int main(int argc, const char *argv[]) {
                    (enc_version >> 16) & 0xff, (enc_version >> 8) & 0xff,
                    enc_version & 0xff, (mux_version >> 16) & 0xff,
                    (mux_version >> 8) & 0xff, mux_version & 0xff);
-            FREE_WARGV_AND_RETURN(0);
-        } else if (!strcmp(argv[c], "-quiet")) {
-            quiet = 1;
-            enc_options.verbose = 0;
+            goto End;
+        } else if (!strcmp(argv[c], "-frames")) {
+            test_frames_info = 1;
         } else if (!strcmp(argv[c], "-v")) {
             verbose = 1;
-            enc_options.verbose = 1;
         } else if (!strcmp(argv[c], "--")) {
             if (c < argc - 1) in_file = GET_WARGV(argv, ++c);
             break;
         } else if (argv[c][0] == '-') {
             fprintf(stderr, "Error! Unknown option '%s'\n", argv[c]);
             Help();
-            FREE_WARGV_AND_RETURN(-1);
+            goto End;
         } else {
             in_file = GET_WARGV(argv, c);
         }
 
-        if (parse_error) {
-            Help();
-            FREE_WARGV_AND_RETURN(-1);
-        }
+        ok = !parse_error;
+        if (!ok) goto End;
     }
 
     if (!enc_options.allow_mixed) config.lossless = 1;
-    config.sns_strength = 100;
+    config.sns_strength = 90;
     config.filter_sharpness = 6;
     config.alpha_quality = 5;
-
-    if (!WebPValidateConfig(&config)) {
+    ok = WebPValidateConfig(&config);
+    if (!ok) {
         fprintf(stderr, "Error! Invalid configuration.\n");
         goto End;
     }
 
-    if (in_file == NULL) {
+    ok = in_file != nullptr;
+    if (!ok) {
         fprintf(stderr, "No input file specified!\n");
         Help();
         goto End;
@@ -212,43 +211,55 @@ int main(int argc, const char *argv[]) {
 
     if (tgsFile(in_file)) {
         gzFile file = gzopen(in_file, "rb");
-        if (file == NULL) error("can't open tgs file");
+        if (file == nullptr) error("can't open tgs file");
         std::string json = gz_uncompress(file);
-       if (!json.empty()) player = rlottie::Animation::loadFromData(json, in_file);
+        if (!json.empty()) player = rlottie::Animation::loadFromData(json, in_file);
     } else if (jsonFile(in_file)) {
         player = rlottie::Animation::loadFromFile(in_file, true);
     } else {
         fprintf(stderr, "Invalid input file format, only supports json or tgs\n");
         Help();
+        ok = 0;
         goto End;
     }
 
     // Start the decoder object
     player = rlottie::Animation::loadFromFile(in_file);
+
+    ok = (player != nullptr);
+    if (!ok) {
+        fprintf(stderr, "Error init Animation ");
+        goto End;
+    }
+
+
     buffer = std::unique_ptr<uint32_t[]>(new uint32_t[width * height]);
     total_frame_lottie = player->totalFrame();
     duration_lottie = int(player->duration() * 1000);
     //  if( total_frame_lottie > 25 ) skip = total_frame_lottie/25;
-    frame_duration = duration_lottie/ (total_frame_lottie / skip) ;
-    fprintf(stderr, "Frames lottie:      %d\n", total_frame_lottie);
-    fprintf(stderr, "Total duration:     %d ms\n", duration_lottie);
-    fprintf(stderr, "Frame duration:     %d ms\n", frame_duration);
-    fprintf(stderr, "Frames webp out:    %d\n", (total_frame_lottie / skip) + 1);
+    frame_duration = duration_lottie / (total_frame_lottie / skip);
+    if(test_frames_info){
+        printf( "%u\n", total_frame_lottie);
+        goto End;
+    }
 
-
-
-
+    if (verbose) {
+        fprintf(stderr, "Frames lottie:      %d\n", total_frame_lottie);
+        fprintf(stderr, "Total duration:     %d ms\n", duration_lottie);
+        fprintf(stderr, "Frame duration:     %d ms\n", frame_duration);
+        fprintf(stderr, "Frames webp out:    %d\n", (total_frame_lottie / skip));
+    }
     //  player->size(reinterpret_cast<size_t &>(width), reinterpret_cast<size_t &>(height));
     frame.width = width;
     frame.height = height;
     frame.use_argb = 1;
-    if (player == NULL) goto End;
 
     for (int i = 0; i < total_frame_lottie; i += skip) {
-        fprintf(stderr, "INFO: Added frame:  %d/%d \r", i, total_frame_lottie);
+        if (verbose) fprintf(stderr, "INFO: Added frame:  %d/%d \r", i, total_frame_lottie);
         rlottie::Surface surface(buffer.get(), width, height, width * 4);
         player->renderSync(i, surface);
-        if (!WebPPictureAlloc(&frame)) {
+        ok = WebPPictureAlloc(&frame);
+        if (!ok) {
             goto End;
         }
         frame.argb = (uint32_t *) surface.buffer();
@@ -276,47 +287,37 @@ int main(int argc, const char *argv[]) {
                 fprintf(stderr, "Error while adding frame");
             }
         }
+
+        /*    if (verbose) {
+                WFPRINTF(stderr, "Added frame #%3d at time %4d (file: %s)\r",
+                         pic_num, frame_timestamp, out_file);
+            }*/
         WebPPictureFree(&frame);
         frame_timestamp += frame_duration;
+        ++pic_num;
     }
 
 
 
     // Last NULL frame.
-    if (!WebPAnimEncoderAdd(enc, NULL, frame_timestamp, NULL)) {
-        fprintf(stderr, "Error flushing WebP muxer.\n");
-        fprintf(stderr, "%s\n", WebPAnimEncoderGetError(enc));
+    ok = ok && WebPAnimEncoderAdd(enc, NULL, frame_timestamp, NULL);
+    ok = ok && WebPAnimEncoderAssemble(enc, &webp_data);
+    if (!ok) {
+        fprintf(stderr, "Error during final animation assembly.\n");
     }
 
-    if (!WebPAnimEncoderAssemble(enc, &webp_data)) {
-        fprintf(stderr, "%s\n", WebPAnimEncoderGetError(enc));
-        goto End;
-    }
 
-    if (out_file != NULL) {
-        if (!ImgIoUtilWriteFile((const char *) out_file, webp_data.bytes,
-                                webp_data.size)) {
-            WFPRINTF(stderr, "Error writing output file: %s\n", out_file);
-            goto End;
-        }
-        if (!quiet) {
-            if (!WSTRCMP(out_file, "-")) {
-                fprintf(stderr, "Saved %d bytes to STDIO\n",
-                        (int) webp_data.size);
-            } else {
-                WFPRINTF(stderr, "Saved output file (%d bytes): %s\n",
-                         (int) webp_data.size, out_file);
-            }
-        }
+    if (ok && out_file != nullptr) {
+        ok = ImgIoUtilWriteFile(out_file, webp_data.bytes, webp_data.size);
+        if (ok) WFPRINTF(stderr, "output file: %s  ", out_file);
     } else {
-        if (!quiet) {
-            fprintf(stderr, "Nothing written; use -o flag to save the result "
-                            "(%d bytes).\n", (int) webp_data.size);
-        }
+        fprintf(stderr, "Nothing written; use -o flag to save the result ");
     }
-
+    if (ok) {
+        fprintf(stderr, "[%d frames, %u bytes].\n",
+                pic_num, (unsigned int) webp_data.size);
+    }
     // All OK.
-    ok = 1;
     End:
     WebPMuxDelete(mux);
     WebPDataClear(&webp_data);
