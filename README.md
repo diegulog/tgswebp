@@ -6,25 +6,22 @@
                /  \_/   / /   \ \   __/  \__
                \____/____/\_____/_____/____/v1.1.0
 
-Description:
-============
+## Description:
 
 Library to encode lottie animation in WebP format.
 
-Building:
-=========
-
+## Building:
+```shell script
 mkdir build
 cd ../build
 cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF ..
 cmake --build .
-
 chmod +x tgswebp
+```
 
+## Animated lottie conversion:
 
-Animated lottie conversion:
-========================
-
+```shell script
 Usage:
  tgswebp [options] lottie_file -o webp_file
 Options:
@@ -46,6 +43,7 @@ Options:
   -frames  ............... print only original frames, test only method
   -v ..................... verbose
 
+```
 
 ## License
 
